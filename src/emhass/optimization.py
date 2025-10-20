@@ -764,9 +764,11 @@ class Optimization:
                     cooling_constant = hc["cooling_constant"]
                     heating_rate = hc["heating_rate"]
                     overshoot_temperature = hc["overshoot_temperature"]
-                    outdoor_temperature_forecast = data_opt[
-                        "outdoor_temperature_forecast"
-                    ]
+                    outdoor_temperature_offset = hc.get("outdoor_temperature_offset", 0)
+                    outdoor_temperature_forecast = (
+                        data_opt["outdoor_temperature_forecast"]
+                        + outdoor_temperature_offset
+                    )
                     desired_temperatures = hc["desired_temperatures"]
                     sense = hc.get("sense", "heat")
                     sense_coeff = 1 if sense == "heat" else -1
