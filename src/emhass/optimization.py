@@ -487,12 +487,24 @@ class Optimization:
             self.logger.error("The cost function specified type is not valid")
         # Add more terms to the objective function in the case of battery use
         if self.optim_conf["set_use_battery"]:
+            weight_battery_discharge = self.optim_conf.get("weight_battery_discharge", 0.0)
+            weight_battery_charge = self.optim_conf.get("weight_battery_charge", 0.0)
             objective = objective + plp.lpSum(
                 -0.001
                 * self.timeStep
                 * (
-                    self.optim_conf["weight_battery_discharge"] * P_sto_pos[i]
-                    - self.optim_conf["weight_battery_charge"] * P_sto_neg[i]
+                    (
+                        weight_battery_discharge[i]
+                        if isinstance(weight_battery_discharge, (list, np.ndarray))
+                        else weight_battery_discharge
+                    )
+                    * P_sto_pos[i]
+                    - (
+                        weight_battery_charge[i]
+                        if isinstance(weight_battery_charge, (list, np.ndarray))
+                        else weight_battery_charge
+                    )
+                    * P_sto_neg[i]
                 )
                 for i in set_I
             )

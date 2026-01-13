@@ -598,6 +598,33 @@ class TestOptimization(unittest.IsolatedAsyncioTestCase):
             soc_final,
         )
 
+    def test_perform_naive_mpc_optim_list_weights(self):
+        self.df_input_data_dayahead = self.prepare_forecast_data()
+        self.optim_conf.update({"set_use_battery": True})
+        # Test Case: List weights
+        # We'll set a very high discharge weight for the first 5 steps,
+        # which should prevent discharge during those steps if possible.
+        prediction_horizon = 10
+        weight_battery_discharge = [100.0] * 5 + [0.0] * 5
+        self.optim_conf.update({"weight_battery_discharge": weight_battery_discharge})
+        self.opt = self.create_optimization()
+        soc_init = 0.8
+        soc_final = 0.4  # Force discharge
+        self.opt_res_dayahead = self.opt.perform_naive_mpc_optim(
+            self.df_input_data_dayahead,
+            self.p_pv_forecast,
+            self.p_load_forecast,
+            prediction_horizon,
+            soc_init=soc_init,
+            soc_final=soc_final,
+        )
+        self.assertIsInstance(self.opt_res_dayahead, type(pd.DataFrame()))
+        # Check that P_batt (discharge) is 0 for the first 5 steps where weight is 100
+        for i in range(5):
+            self.assertAlmostEqual(self.opt_res_dayahead["P_batt"].iloc[i], 0.0, places=2)
+        # Verify that for the next 5 steps, discharge occurs
+        self.assertGreater(self.opt_res_dayahead["P_batt"].iloc[5:].sum(), 0.0)
+
     # Test format output of dayahead optimization with a thermal deferrable load
     def test_thermal_load_optim(self):
         self.df_input_data_dayahead = self.prepare_forecast_data()
