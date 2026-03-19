@@ -780,6 +780,10 @@ class Optimization:
         else:
             vars_dict["p_def_sum"] = np.zeros(n)
 
+        # Baseline power operational cost variable
+        if self.plant_conf.get("inverter_baseline_power", 0.0) > 0:
+            vars_dict["is_inverter_active"] = cp.Variable(n, boolean=True, name="is_inverter_active")
+
         return vars_dict, constraints
 
     def _build_objective_function(
@@ -924,10 +928,15 @@ class Optimization:
             self.plant_conf.get("maximum_power_to_grid", 9000), "maximum_power_to_grid", n
         )
 
+        inverter_baseline_power = self.plant_conf.get("inverter_baseline_power", 0.0)
+        baseline_load = np.zeros(n)
+        if inverter_baseline_power > 0:
+            baseline_load = self.vars["is_inverter_active"] * inverter_baseline_power
+
         # Main Power Balance Constraints
         if self.plant_conf["inverter_is_hybrid"]:
             constraints.append(
-                p_hybrid_inverter - p_def_sum - p_load + p_grid_neg + p_grid_pos == 0
+                p_hybrid_inverter - p_def_sum - p_load - baseline_load + p_grid_neg + p_grid_pos == 0
             )
         else:
             if self.plant_conf["compute_curtailment"]:
@@ -936,6 +945,7 @@ class Optimization:
                     - p_pv_curtailment
                     - p_def_sum
                     - p_load
+                    - baseline_load
                     + p_grid_neg
                     + p_grid_pos
                     + p_sto_pos
@@ -944,7 +954,7 @@ class Optimization:
                 )
             else:
                 constraints.append(
-                    p_pv - p_def_sum - p_load + p_grid_neg + p_grid_pos + p_sto_pos + p_sto_neg == 0
+                    p_pv - p_def_sum - p_load - baseline_load + p_grid_neg + p_grid_pos + p_sto_pos + p_sto_neg == 0
                 )
 
         # Grid Constraints (Vectorized with Time-Varying Limits)
@@ -1042,6 +1052,16 @@ class Optimization:
         constraints.append(p_ac_dc <= (1 - is_dc_sourcing) * p_ac_dc_max)
         constraints.append(p_dc_ac <= is_dc_sourcing * p_dc_ac_max)
 
+        # Baseline Power Cost Constraints
+        if self.plant_conf.get("inverter_baseline_power", 0.0) > 0:
+            is_inverter_active = self.vars["is_inverter_active"]
+            M_inv_pos = p_nom_inverter_output if p_nom_inverter_output is not None else 100000
+            M_inv_neg = p_nom_inverter_input if p_nom_inverter_input is not None else 100000
+            if M_inv_pos <= 0: M_inv_pos = 100000
+            if M_inv_neg <= 0: M_inv_neg = 100000
+            constraints.append(p_hybrid_inverter <= M_inv_pos * is_inverter_active)
+            constraints.append(p_hybrid_inverter >= -M_inv_neg * is_inverter_active)
+
         # Stress Cost
         if inv_stress_conf and inv_stress_conf["active"]:
             seg_params = self._build_stress_segments(
@@ -1114,6 +1134,14 @@ class Optimization:
         # Charge limit based on binary E (1-E)
         # p_sto_neg >= -1/eff * max * (1-E)  --> (p_sto_neg is negative)
         constraints.append(p_sto_neg >= -(1 / eff_chg) * max_chg * (1 - E))
+
+        # Baseline Power Cost Constraints
+        if self.plant_conf.get("inverter_baseline_power", 0.0) > 0:
+            is_inverter_active = self.vars["is_inverter_active"]
+            M_bat_pos = (eff_dis * max_dis) if max_dis > 0 else 100000
+            M_bat_neg = ((1 / eff_chg) * max_chg) if max_chg > 0 else 100000
+            constraints.append(p_sto_pos <= M_bat_pos * is_inverter_active)
+            constraints.append(p_sto_neg >= -M_bat_neg * is_inverter_active)
 
         # SOC Constraints (Vectorized Accumulation)
 

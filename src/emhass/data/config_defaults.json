@@ -104,6 +104,7 @@
   "inverter_efficiency_ac_dc": 1.0,
   "inverter_stress_cost": 0.0,
   "inverter_stress_segments": 10,
+  "inverter_baseline_power": 0.0,
   "compute_curtailment": false,
   "set_use_battery": false,
   "battery_discharge_power_max": 1000,

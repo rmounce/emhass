@@ -3888,6 +3888,35 @@ class TestOptimization(unittest.IsolatedAsyncioTestCase):
             "Load 1 with 0 hours should be deactivated",
         )
 
+    def test_inverter_baseline_power(self):
+        """Test that adding an inverter baseline power operational cost works and optimization is feasible."""
+        self.df_input_data_dayahead = self.prepare_forecast_data()
+        self.optim_conf.update(
+            {
+                "set_use_battery": True,
+                "number_of_deferrable_loads": 0,
+            }
+        )
+        self.plant_conf.update(
+            {
+                "inverter_baseline_power": 1000.0, # High penalty to force testing
+                "inverter_is_hybrid": True
+            }
+        )
+        self.opt = self.create_optimization()
+        prediction_horizon = 10
+        opt_res = self.opt.perform_naive_mpc_optim(
+            self.df_input_data_dayahead,
+            self.p_pv_forecast,
+            self.p_load_forecast,
+            prediction_horizon,
+            soc_init=0.5,
+            soc_final=0.5,
+        )
+        self.assertIsInstance(opt_res, pd.DataFrame)
+        self.assertIn(self.opt.optim_status, VALID_OPTIMAL_STATUSES)
+
+
 
 if __name__ == "__main__":
     unittest.main()
